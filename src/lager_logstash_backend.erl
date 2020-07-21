@@ -142,7 +142,7 @@ encode_json_event(_, Node, Node_Role, Node_Version, Severity, Date, Time, Messag
                 },
                 {<<"@timestamp">>, list_to_binary(DateTime)}, %% use the logstash timestamp
                 {<<"message">>, safe_list_to_binary(Message)},
-                {<<"type">>, <<"erlang">>}
+                {<<"type">>, <<"dsan">>}
             ]
   }).
 
