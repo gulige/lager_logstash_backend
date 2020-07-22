@@ -91,23 +91,28 @@ handle_event({log, {lager_msg, Q, Metadata, Severity, {Date, Time}, _, Message}}
   handle_event({log, {lager_msg, Q, Metadata, Severity, {Date, Time}, Message}}, State);
 
 handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, #state{level=L, metadata=Config_Meta}=State) ->
-  case lager_util:level_to_num(Severity) =< L of
-    true ->
-      Encoded_Message = encode_json_event(State#state.lager_level_type,
-                                                  node(),
-                                                  State#state.node_role,
-                                                  State#state.node_version,
-                                                  Severity,
-                                                  Date,
-                                                  Time,
-                                                  Message,
-                                                  metadata(Metadata, Config_Meta)),
-      gen_udp:send(State#state.socket,
-                   State#state.logstash_address,
-                   State#state.logstash_port,
-                   Encoded_Message);
-    _ ->
-      ok
+  case lists:keyfind(logstash, 1, Metadata) of
+      {logstash, true} ->
+          case lager_util:level_to_num(Severity) =< L of
+            true ->
+              Encoded_Message = encode_json_event(State#state.lager_level_type,
+                                                          node(),
+                                                          State#state.node_role,
+                                                          State#state.node_version,
+                                                          Severity,
+                                                          Date,
+                                                          Time,
+                                                          Message,
+                                                          metadata(Metadata, Config_Meta)),
+              gen_udp:send(State#state.socket,
+                           State#state.logstash_address,
+                           State#state.logstash_port,
+                           Encoded_Message);
+            _ ->
+              ok
+          end;
+      _ ->
+          ok
   end,
   {ok, State};
 
