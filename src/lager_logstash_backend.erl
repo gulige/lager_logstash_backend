@@ -48,14 +48,7 @@ init(Params) ->
   Node_Role = proplists:get_value(node_role, Params, "no_role"),
   Node_Version = proplists:get_value(node_version, Params, "no_version"),
 
-  Metadata = proplists:get_value(metadata, Params, []) ++
-     [
-      {pid, [{encoding, process}]},
-      {function, [{encoding, atom}]},
-      {line, [{encoding, integer}]},
-      {file, [{encoding, string}]},
-      {module, [{encoding, atom}]}
-     ],
+  Metadata = proplists:get_value(metadata, Params, []),
 
  {Socket, Address} =
    case inet:getaddr(Host, inet) of
@@ -95,6 +88,14 @@ handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, #
       {logstash, true} ->
           case lager_util:level_to_num(Severity) =< L of
             true ->
+              ErlangConfigMeta =
+                 [
+                  {pid, [{encoding, process}]},
+                  {function, [{encoding, atom}]},
+                  {line, [{encoding, integer}]},
+                  {file, [{encoding, string}]},
+                  {module, [{encoding, atom}]}
+                 ],
               Encoded_Message = encode_json_event(State#state.lager_level_type,
                                                           node(),
                                                           State#state.node_role,
@@ -103,6 +104,7 @@ handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, #
                                                           Date,
                                                           Time,
                                                           Message,
+                                                          metadata(Metadata, ErlangConfigMeta),
                                                           metadata(Metadata, Config_Meta)),
               gen_udp:send(State#state.socket,
                            State#state.logstash_address,
@@ -133,23 +135,26 @@ code_change(_OldVsn, State, _Extra) ->
   Vsn = get_app_version(),
   {ok, State#state{node_version=Vsn}}.
 
-encode_json_event(_, Node, Node_Role, Node_Version, Severity, Date, Time, Message, Metadata) ->
+encode_json_event(_, Node, Node_Role, Node_Version, Severity, Date, Time, Message, ErlangMetaData, Metadata) ->
   TimeWithoutUtc = re:replace(Time, "(\\s+)UTC", "", [{return, list}]),
   %DateTime = io_lib:format("~sT~sZ", [Date,TimeWithoutUtc]),
   % only for my project's use!
   DateTime = io_lib:format("~sT~s+08:00", [Date,TimeWithoutUtc]),
   jiffy:encode({[
-                {<<"fields">>,
+                {<<"erlang">>,
                     {[
-                        {<<"level">>, Severity},
                         {<<"role">>, list_to_binary(Node_Role)},
                         {<<"role_version">>, list_to_binary(Node_Version)},
                         {<<"node">>, Node}
-                    ] ++ Metadata }
+                    ] ++ ErlangMetaData}
+                },
+                {<<"dsan">>,
+                    {Metadata}
                 },
                 {<<"@timestamp">>, list_to_binary(DateTime)}, %% use the logstash timestamp
                 {<<"message">>, safe_list_to_binary(Message)},
-                {<<"type">>, <<"dsan">>}
+                {<<"level">>, Severity},
+                {<<"type">>, <<"dsan_alarm">>}
             ]
   }).
 
